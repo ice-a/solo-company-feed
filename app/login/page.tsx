@@ -1,4 +1,5 @@
 import LoginForm from "./login-form";
+import { Suspense } from "react";
 
 export const metadata = {
   title: "登录 - Push Info"
@@ -12,7 +13,9 @@ export default function LoginPage() {
         输入后台口令即可发布/统计。口令保存在服务器的环境变量 ADMIN_PASS。
       </p>
       <div className="mt-6">
-        <LoginForm />
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
