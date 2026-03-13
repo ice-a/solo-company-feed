@@ -1,10 +1,13 @@
 import { Db, MongoClient } from "mongodb";
 
-const uri = process.env.MONGODB_URI;
 const dbName = process.env.MONGODB_DB || "pushinfo";
 
-if (!uri) {
-  throw new Error("Missing MONGODB_URI in environment variables");
+function getMongoUri(): string {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("Missing MONGODB_URI in environment variables");
+  }
+  return uri;
 }
 
 let client: MongoClient | null = null;
@@ -14,11 +17,9 @@ export async function getDb(): Promise<Db> {
   if (db) return db;
 
   if (!client) {
-    client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+    client = new MongoClient(getMongoUri(), { serverSelectionTimeoutMS: 5000 });
   }
-  if (!client.topology?.isConnected()) {
-    await client.connect();
-  }
+  await client.connect();
   db = client.db(dbName);
   return db;
 }

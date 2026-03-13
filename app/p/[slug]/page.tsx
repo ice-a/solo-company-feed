@@ -3,6 +3,8 @@ import { MarkdownViewer } from "@/components/MarkdownViewer";
 import { notFound } from "next/navigation";
 import { normalizeImageUrl } from "@/lib/normalize";
 import { Post } from "@/types/post";
+import { SharePanel } from "@/components/SharePanel";
+import { getSiteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +39,15 @@ export default async function PostPage({ params }: Props) {
     notFound();
   }
   const coverUrl = normalizeImageUrl(post.cover);
+  const shareUrl = `${getSiteUrl()}/p/${post.slug}`;
 
   return (
     <article className="rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-slate-100">
       <div className="mb-4">
-        <h1 className="text-2xl font-semibold text-slate-900">{post.title}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-slate-900">{post.title}</h1>
+          <SharePanel url={shareUrl} />
+        </div>
         <p className="mt-2 text-sm text-slate-500">
           {new Date(post.createdAt).toLocaleString("zh-CN", { hour12: false })}
         </p>
