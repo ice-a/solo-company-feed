@@ -11,7 +11,7 @@ export async function GET(_: NextRequest, { params }: { params: { slug: string }
     { returnDocument: "after" }
   );
 
-  if (!post.value) {
+  if (!post || !post.value) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
