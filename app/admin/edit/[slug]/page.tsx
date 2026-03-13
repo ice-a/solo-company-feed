@@ -1,16 +1,25 @@
 import { getDb } from "@/lib/mongo";
 import { notFound } from "next/navigation";
 import { EditPostForm } from "@/components/EditPostForm";
+import { Post } from "@/types/post";
 
 export const dynamic = "force-dynamic";
 
-async function fetchPost(slug: string) {
+async function fetchPost(slug: string): Promise<Post | null> {
   const db = await getDb();
   const post = await db.collection("posts").findOne({ slug });
   if (!post) return null;
   return {
-    ...post,
-    _id: post._id?.toString()
+    _id: post._id?.toString(),
+    title: post.title ?? "",
+    slug: post.slug ?? slug,
+    markdown: post.markdown ?? "",
+    cover: post.cover,
+    tags: post.tags ?? [],
+    author: post.author ?? "admin",
+    createdAt: post.createdAt ?? new Date().toISOString(),
+    updatedAt: post.updatedAt ?? post.createdAt ?? new Date().toISOString(),
+    views: post.views ?? 0
   };
 }
 
