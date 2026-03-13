@@ -2,6 +2,7 @@ import { getDb } from "@/lib/mongo";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
 import { notFound } from "next/navigation";
 import { normalizeImageUrl } from "@/lib/normalize";
+import { Post } from "@/types/post";
 
 export const dynamic = "force-dynamic";
 
@@ -9,15 +10,23 @@ type Props = {
   params: { slug: string };
 };
 
-async function fetchPost(slug: string) {
+async function fetchPost(slug: string): Promise<Post | null> {
   const db = await getDb();
   const doc = await db.collection("posts").findOne({ slug });
   if (!doc) return null;
   // fire-and-forget view increment
   db.collection("posts").updateOne({ slug }, { $inc: { views: 1 } }).catch(() => {});
   return {
-    ...doc,
-    _id: doc._id?.toString()
+    _id: doc._id?.toString(),
+    title: doc.title ?? "",
+    slug: doc.slug ?? slug,
+    markdown: doc.markdown ?? "",
+    cover: doc.cover,
+    tags: doc.tags ?? [],
+    author: doc.author ?? "admin",
+    createdAt: doc.createdAt ?? new Date().toISOString(),
+    updatedAt: doc.updatedAt ?? doc.createdAt ?? new Date().toISOString(),
+    views: doc.views ?? 0
   };
 }
 
