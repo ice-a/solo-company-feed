@@ -1,0 +1,22 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# production
+.next
+out
+
+# debug
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env
+.env
+.env.local
+.env.*.local
+
+# misc
+.DS_Store
