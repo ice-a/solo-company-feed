@@ -35,6 +35,7 @@ async function fetchPosts(params: {
   return {
     posts: docs.map((d: any) => ({
       ...d,
+      author: d.author ?? "佚名",
       _id: d._id?.toString()
     })),
     total,
@@ -62,32 +63,50 @@ export default async function HomePage({
     return qs ? `/?${qs}` : "/";
   };
 
+  const clearSearchHref = (() => {
+    const params = new URLSearchParams();
+    if (tag) params.set("tag", tag);
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  })();
+
+  const clearTagHref = (() => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  })();
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl bg-gradient-to-r from-brand-500 to-brand-700 p-6 text-white shadow-lg">
-        <h1 className="text-2xl font-semibold">朋友圈 · 信息流</h1>
+        <h1 className="text-2xl font-semibold">OPC 信息流</h1>
         <p className="mt-2 text-sm text-white/80">
-          Markdown 排版 · 云图床 · 响应式 · 免费 MongoDB Atlas 存储。
+          用 Markdown 记录进展、发布动态，让一人公司也有自己的信息流平台。
         </p>
         {tag ? (
           <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
-            <span>筛选标签：#{tag}</span>
+            <span>当前标签 #{tag}</span>
             <a
-              href="/"
+              href={clearTagHref}
               className="rounded-full bg-white/20 px-2 py-1 text-white/90 hover:bg-white/30"
             >
-              清除
+              清除标签
             </a>
           </div>
         ) : null}
       </div>
 
-      <form action="/" method="get" className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100">
+      <form
+        action="/"
+        method="get"
+        className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100"
+      >
         {tag ? <input type="hidden" name="tag" value={tag} /> : null}
         <input
           name="q"
           defaultValue={q || ""}
-          placeholder="搜索标题或正文"
+          placeholder="搜索标题或内容"
           className="min-w-[200px] flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
         />
         <button
@@ -97,10 +116,7 @@ export default async function HomePage({
           搜索
         </button>
         {q ? (
-          <a
-            href={tag ? `/?tag=${encodeURIComponent(tag)}` : "/"}
-            className="text-sm text-slate-500 hover:text-brand-600"
-          >
+          <a href={clearSearchHref} className="text-sm text-slate-500 hover:text-brand-600">
             清除搜索
           </a>
         ) : null}
@@ -109,7 +125,7 @@ export default async function HomePage({
 
       {posts.length === 0 ? (
         <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">
-          暂无匹配内容。
+          暂无内容，去后台发布吧。
         </p>
       ) : (
         <div className="grid gap-4">

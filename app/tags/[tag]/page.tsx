@@ -32,6 +32,7 @@ async function fetchTagPosts(params: {
   return {
     posts: docs.map((d: any) => ({
       ...d,
+      author: d.author ?? "佚名",
       _id: d._id?.toString()
     })),
     total,
@@ -63,8 +64,8 @@ export default async function TagDetailPage({
   return (
     <div className="space-y-6">
       <div className="rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-slate-100">
-        <h1 className="text-2xl font-semibold">标签：#{tag}</h1>
-        <p className="mt-2 text-sm text-slate-500">共 {total} 条内容。</p>
+        <h1 className="text-2xl font-semibold">标签 · {tag}</h1>
+        <p className="mt-2 text-sm text-slate-500">共 {total} 条内容</p>
       </div>
 
       <form
@@ -75,7 +76,7 @@ export default async function TagDetailPage({
         <input
           name="q"
           defaultValue={q || ""}
-          placeholder="在该标签下搜索"
+          placeholder="在当前标签内搜索"
           className="min-w-[200px] flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
         />
         <button
@@ -96,7 +97,7 @@ export default async function TagDetailPage({
 
       {posts.length === 0 ? (
         <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">
-          暂无匹配内容。
+          暂无内容。
         </p>
       ) : (
         <div className="grid gap-4">

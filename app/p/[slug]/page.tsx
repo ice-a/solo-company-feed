@@ -5,6 +5,7 @@ import { normalizeImageUrl } from "@/lib/normalize";
 import { Post } from "@/types/post";
 import { SharePanel } from "@/components/SharePanel";
 import { getSiteUrl } from "@/lib/site";
+import { DEFAULT_OPC_SIGNAL } from "@/lib/opc";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,8 @@ async function fetchPost(slug: string): Promise<Post | null> {
     markdown: doc.markdown ?? "",
     cover: doc.cover,
     tags: doc.tags ?? [],
-    author: doc.author ?? "admin",
+    signal: doc.signal ?? DEFAULT_OPC_SIGNAL,
+    author: doc.author ?? "佚名",
     createdAt: doc.createdAt ?? new Date().toISOString(),
     updatedAt: doc.updatedAt ?? doc.createdAt ?? new Date().toISOString(),
     views: doc.views ?? 0
@@ -49,7 +51,7 @@ export default async function PostPage({ params }: Props) {
           <SharePanel url={shareUrl} />
         </div>
         <p className="mt-2 text-sm text-slate-500">
-          {new Date(post.createdAt).toLocaleString("zh-CN", { hour12: false })}
+          {post.author || "佚名"} · {new Date(post.createdAt).toLocaleString("zh-CN", { hour12: false })}
         </p>
         {coverUrl ? (
           <img

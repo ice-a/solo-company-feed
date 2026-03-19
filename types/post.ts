@@ -5,6 +5,7 @@ export type Post = {
   markdown: string;
   cover?: string;
   tags?: string[];
+  signal?: string;
   author: string;
   createdAt: string;
   updatedAt: string;

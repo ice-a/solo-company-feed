@@ -2,6 +2,7 @@ import { getDb } from "@/lib/mongo";
 import { notFound } from "next/navigation";
 import { EditPostForm } from "@/components/EditPostForm";
 import { Post } from "@/types/post";
+import { DEFAULT_OPC_SIGNAL } from "@/lib/opc";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,8 @@ async function fetchPost(slug: string): Promise<Post | null> {
     markdown: post.markdown ?? "",
     cover: post.cover,
     tags: post.tags ?? [],
-    author: post.author ?? "admin",
+    signal: post.signal ?? DEFAULT_OPC_SIGNAL,
+    author: post.author ?? "佚名",
     createdAt: post.createdAt ?? new Date().toISOString(),
     updatedAt: post.updatedAt ?? post.createdAt ?? new Date().toISOString(),
     views: post.views ?? 0

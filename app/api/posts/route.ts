@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongo";
 import { z } from "zod";
 import { generateSlug } from "@/lib/slug";
+import { DEFAULT_OPC_SIGNAL, OPC_SIGNAL_VALUES } from "@/lib/opc";
+import { cookieName, verifySession } from "@/lib/auth";
 
 const postSchema = z.object({
   title: z.string().min(2).max(80),
   markdown: z.string().min(5),
   cover: z.string().url().optional(),
   tags: z.array(z.string().trim()).optional(),
-  author: z.string().default("admin")
+  signal: z.enum(OPC_SIGNAL_VALUES).default(DEFAULT_OPC_SIGNAL)
 });
 
 export async function GET() {
@@ -23,6 +25,7 @@ export async function GET() {
   return NextResponse.json(
     posts.map((p) => ({
       ...p,
+      author: p.author ?? "佚名",
       _id: p._id?.toString()
     }))
   );
@@ -37,6 +40,12 @@ export async function POST(req: NextRequest) {
   }
 
   const data = parsed.data;
+  const token = req.cookies.get(cookieName)?.value;
+  const session = await verifySession(token);
+  if (!session) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+  const author = session.name ?? "佚名";
   const now = new Date().toISOString();
   let slug = generateSlug();
   const db = await getDb();
@@ -53,6 +62,7 @@ export async function POST(req: NextRequest) {
 
   const doc = {
     ...data,
+    author,
     slug,
     createdAt: now,
     updatedAt: now,

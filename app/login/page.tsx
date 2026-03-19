@@ -1,22 +1,23 @@
 import LoginForm from "./login-form";
-import { Suspense } from "react";
 
 export const metadata = {
-  title: "登录 - Push Info"
+  title: "登录 - OPC Solo Feed"
 };
 
 export default function LoginPage() {
   return (
     <div className="mx-auto max-w-md rounded-2xl bg-white/90 p-8 shadow-sm ring-1 ring-slate-100">
       <h1 className="text-2xl font-semibold text-slate-900">管理员登录</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        输入后台口令即可发布/统计。口令保存在服务器的环境变量 ADMIN_PASS。
-      </p>
+      <p className="mt-2 text-sm text-slate-600">使用已注册账号登录。</p>
       <div className="mt-6">
-        <Suspense fallback={null}>
-          <LoginForm />
-        </Suspense>
+        <LoginForm />
       </div>
+      <p className="mt-4 text-sm text-slate-500">
+        还没有账号？{" "}
+        <a href="/register" className="text-brand-600 hover:text-brand-700">
+          去注册
+        </a>
+      </p>
     </div>
   );
 }

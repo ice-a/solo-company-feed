@@ -1,26 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signSession, cookieName } from "@/lib/auth";
+import { getDb } from "@/lib/mongo";
+import { verifyPassword } from "@/lib/password";
+import { z } from "zod";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const password = body.password as string | undefined;
-  const target = process.env.ADMIN_PASS;
+  const schema = z.object({
+    username: z.string().trim().min(2).max(32),
+    password: z.string().min(6).max(128)
+  });
+  const parsed = schema.safeParse(body);
 
-  if (!target) {
-    return NextResponse.json({ error: "ADMIN_PASS is not set on server" }, { status: 500 });
+  if (!parsed.success) {
+    return NextResponse.json({ error: "请输入正确的用户名与密码" }, { status: 400 });
   }
 
-  if (!password || password !== target) {
-    return NextResponse.json({ error: "密码错误" }, { status: 401 });
+  const { username, password } = parsed.data;
+  const db = await getDb();
+  const user = await db.collection("users").findOne({ usernameLower: username.toLowerCase() });
+  if (
+    !user ||
+    typeof user.passwordSalt !== "string" ||
+    typeof user.passwordHash !== "string" ||
+    !verifyPassword(password, user.passwordSalt, user.passwordHash)
+  ) {
+    return NextResponse.json({ error: "用户名或密码错误" }, { status: 401 });
   }
 
-  const token = await signSession({ role: "admin", iat: Date.now() });
-  const res = NextResponse.json({ ok: true });
+  const name = user.displayName || user.username || username;
+  const exp = Date.now() + 24 * 60 * 60 * 1000;
+  const token = await signSession({
+    role: "admin",
+    iat: Date.now(),
+    exp,
+    uid: user._id?.toString(),
+    name
+  });
+  const res = NextResponse.json({ ok: true, name });
   res.cookies.set(cookieName, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: true,
-    maxAge: 60 * 60 * 24 * 30,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 60 * 60 * 24,
     path: "/"
   });
   return res;

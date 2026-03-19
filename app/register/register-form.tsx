@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function LoginForm() {
+export default function RegisterForm() {
   const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -15,14 +16,18 @@ export default function LoginForm() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({
+          username,
+          password,
+          displayName: displayName.trim() || undefined
+        })
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "登录失败");
+        setError(data.error || "注册失败");
       } else {
         router.replace("/");
         router.refresh();
@@ -42,9 +47,21 @@ export default function LoginForm() {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
-          placeholder="请输入用户名"
+          placeholder="2-32 个字符"
         />
       </label>
+
+      <label className="block space-y-1">
+        <span className="text-sm font-medium text-slate-700">显示名（可选）</span>
+        <input
+          type="text"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
+          placeholder="不填则使用用户名"
+        />
+      </label>
+
       <label className="block space-y-1">
         <span className="text-sm font-medium text-slate-700">密码</span>
         <input
@@ -53,16 +70,18 @@ export default function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
-          placeholder="请输入密码"
+          placeholder="至少 6 位"
         />
       </label>
+
       {error ? <p className="text-sm text-red-500">{error}</p> : null}
+
       <button
         type="submit"
         disabled={loading}
         className="w-full rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? "登录中..." : "登录"}
+        {loading ? "注册中..." : "注册"}
       </button>
     </form>
   );

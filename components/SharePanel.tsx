@@ -93,7 +93,7 @@ export function SharePanel({ url }: { url: string }) {
                   loading="lazy"
                 />
               </div>
-              <p className="text-xs text-slate-500">扫码查看本篇内容</p>
+              <p className="text-xs text-slate-500">使用手机扫码打开链接</p>
             </div>
           )}
         </div>
