@@ -1,7 +1,9 @@
 import { PostCard } from "@/components/PostCard";
+import { SocialLinksBar } from "@/components/SocialLinksBar";
 import { getDb } from "@/lib/mongo";
 import { buildPinnedSort, serializePost } from "@/lib/posts";
 import { buildSearchFilter } from "@/lib/search";
+import { getSiteSettings } from "@/lib/site-settings";
 import { Post } from "@/types/post";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +55,11 @@ export default async function HomePage({
   const tag = searchParams?.tag?.trim();
   const q = searchParams?.q?.trim();
   const page = Number.parseInt(searchParams?.page || "1", 10) || 1;
-  const { posts, total, totalPages, page: currentPage } = await fetchPosts({ tag, q, page });
+
+  const [{ posts, total, totalPages, page: currentPage }, siteSettings] = await Promise.all([
+    fetchPosts({ tag, q, page }),
+    getSiteSettings()
+  ]);
 
   const buildHref = (targetPage: number) => {
     const params = new URLSearchParams();
@@ -85,8 +91,13 @@ export default async function HomePage({
         <p className="mt-2 text-sm text-white/80">
           未登录用户可以浏览全部内容；登录用户可以发布并修改自己的内容；置顶内容会优先展示。
         </p>
+
+        <div className="mt-4">
+          <SocialLinksBar links={siteSettings.socialLinks} title="社交链接" />
+        </div>
+
         {tag ? (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
             <span>当前标签 #{tag}</span>
             <a
               href={clearTagHref}

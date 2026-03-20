@@ -2,9 +2,11 @@ import { cookies } from "next/headers";
 import { AdminPostList } from "@/components/AdminPostList";
 import { AdminUserManager } from "@/components/AdminUserManager";
 import { CreatePostForm } from "@/components/CreatePostForm";
+import { SocialLinksManager } from "@/components/SocialLinksManager";
 import { cookieName, isAdminSession, verifySession } from "@/lib/auth";
 import { getDb } from "@/lib/mongo";
 import { buildOwnedPostFilter, buildPinnedSort, serializePost } from "@/lib/posts";
+import { getDefaultSocialLinks, getSiteSettings } from "@/lib/site-settings";
 import { findUserById, getEffectiveDailyPostLimit, getShanghaiDayRange } from "@/lib/users";
 import { Post } from "@/types/post";
 
@@ -203,13 +205,15 @@ export default async function AdminPage() {
   const adminView = isAdminSession(session);
   const roleLabel = ROLE_LABELS[(session?.role as ManagedUser["role"]) || "user"];
 
-  const [recentPosts, favoritePosts, availableTags, publishQuota, managedUsers] = await Promise.all([
-    fetchRecentPosts(session),
-    fetchFavoritePosts(session),
-    fetchAvailableTags(session),
-    fetchPublishQuota(session),
-    adminView ? fetchManagedUsers() : Promise.resolve([] as ManagedUser[])
-  ]);
+  const [recentPosts, favoritePosts, availableTags, publishQuota, managedUsers, siteSettings] =
+    await Promise.all([
+      fetchRecentPosts(session),
+      fetchFavoritePosts(session),
+      fetchAvailableTags(session),
+      fetchPublishQuota(session),
+      adminView ? fetchManagedUsers() : Promise.resolve([] as ManagedUser[]),
+      adminView ? getSiteSettings() : Promise.resolve({ socialLinks: getDefaultSocialLinks() })
+    ]);
 
   return (
     <div className="space-y-6">
@@ -218,7 +222,7 @@ export default async function AdminPage() {
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold text-slate-900">内容后台</h1>
             <p className="text-sm text-slate-500">
-              登录用户可以发布、编辑自己的内容和管理自己的收藏；管理员额外拥有置顶、删帖、删用户和调整用户等级/额度的全部权限。
+              登录用户可以发布、编辑自己的内容和管理自己的收藏；管理员额外拥有置顶、删帖、删用户、调整用户等级/额度，以及维护首页社交链接的全部权限。
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -234,6 +238,8 @@ export default async function AdminPage() {
           </div>
         </div>
       </section>
+
+      {adminView ? <SocialLinksManager initialLinks={siteSettings.socialLinks} /> : null}
 
       <CreatePostForm
         availableTags={availableTags}
