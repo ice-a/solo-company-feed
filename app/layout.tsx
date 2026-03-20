@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ReactNode } from "react";
 import { cookies } from "next/headers";
+import { LogoutButton } from "@/components/LogoutButton";
 import { cookieName, verifySession } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -44,9 +45,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </nav>
 
               {session ? (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                  {userName}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    {userName}
+                  </span>
+                  <LogoutButton />
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Link
