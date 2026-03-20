@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { signSession, cookieName } from "@/lib/auth";
+import { z } from "zod";
+import { signSession, cookieName, isAdminName } from "@/lib/auth";
 import { getDb } from "@/lib/mongo";
 import { verifyPassword } from "@/lib/password";
-import { z } from "zod";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "请输入正确的用户名与密码" }, { status: 400 });
+    return NextResponse.json({ error: "用户名或密码格式不正确" }, { status: 400 });
   }
 
   const { username, password } = parsed.data;
@@ -29,13 +29,20 @@ export async function POST(req: NextRequest) {
   }
 
   const name = user.displayName || user.username || username;
+  const role =
+    user.role === "admin" || user.role === "user"
+      ? user.role
+      : isAdminName(user.username) || isAdminName(name)
+        ? "admin"
+        : "user";
   const exp = Date.now() + 24 * 60 * 60 * 1000;
   const token = await signSession({
-    role: "admin",
+    role,
     iat: Date.now(),
     exp,
     uid: user._id?.toString(),
-    name
+    name,
+    username: user.username || username
   });
   const res = NextResponse.json({ ok: true, name });
   res.cookies.set(cookieName, token, {

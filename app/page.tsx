@@ -1,7 +1,8 @@
-import { getDb } from "@/lib/mongo";
 import { PostCard } from "@/components/PostCard";
-import { Post } from "@/types/post";
+import { getDb } from "@/lib/mongo";
+import { serializePost } from "@/lib/posts";
 import { buildSearchFilter } from "@/lib/search";
+import { Post } from "@/types/post";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +15,16 @@ async function fetchPosts(params: {
 }): Promise<{ posts: Post[]; total: number; page: number; totalPages: number }> {
   const db = await getDb();
   const filters: Record<string, unknown>[] = [];
+
   if (params.tag) {
     filters.push({ tags: params.tag });
   }
+
   const searchFilter = buildSearchFilter(params.q);
   if (searchFilter) {
     filters.push(searchFilter as Record<string, unknown>);
   }
+
   const filter = filters.length > 0 ? { $and: filters } : {};
   const total = await db.collection("posts").countDocuments(filter);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -32,12 +36,9 @@ async function fetchPosts(params: {
     .skip((page - 1) * PAGE_SIZE)
     .limit(PAGE_SIZE)
     .toArray();
+
   return {
-    posts: docs.map((d: any) => ({
-      ...d,
-      author: d.author ?? "佚名",
-      _id: d._id?.toString()
-    })),
+    posts: docs.map((doc: any) => serializePost(doc)),
     total,
     page,
     totalPages
@@ -80,9 +81,9 @@ export default async function HomePage({
   return (
     <div className="space-y-6">
       <div className="rounded-2xl bg-gradient-to-r from-brand-500 to-brand-700 p-6 text-white shadow-lg">
-        <h1 className="text-2xl font-semibold">OPC 信息流</h1>
+        <h1 className="text-2xl font-semibold">OPC Feed</h1>
         <p className="mt-2 text-sm text-white/80">
-          用 Markdown 记录进展、发布动态，让一人公司也有自己的信息流平台。
+          未登录用户可以浏览全部内容；登录用户只能发布和修改自己的内容。
         </p>
         {tag ? (
           <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
@@ -124,9 +125,7 @@ export default async function HomePage({
       </form>
 
       {posts.length === 0 ? (
-        <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">
-          暂无内容，去后台发布吧。
-        </p>
+        <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">暂无内容。</p>
       ) : (
         <div className="grid gap-4">
           {posts.map((post) => (
@@ -142,13 +141,21 @@ export default async function HomePage({
         <div className="flex items-center gap-2">
           <a
             href={buildHref(Math.max(1, currentPage - 1))}
-            className={`rounded-full px-3 py-1 ${currentPage <= 1 ? "pointer-events-none text-slate-300" : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"}`}
+            className={`rounded-full px-3 py-1 ${
+              currentPage <= 1
+                ? "pointer-events-none text-slate-300"
+                : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"
+            }`}
           >
             上一页
           </a>
           <a
             href={buildHref(Math.min(totalPages, currentPage + 1))}
-            className={`rounded-full px-3 py-1 ${currentPage >= totalPages ? "pointer-events-none text-slate-300" : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"}`}
+            className={`rounded-full px-3 py-1 ${
+              currentPage >= totalPages
+                ? "pointer-events-none text-slate-300"
+                : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"
+            }`}
           >
             下一页
           </a>

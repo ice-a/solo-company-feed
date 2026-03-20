@@ -7,6 +7,7 @@ export async function middleware(req: NextRequest) {
 
   const isProtected =
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/stats") ||
     pathname.startsWith("/api/admin") ||
     pathname.startsWith("/api/posts") && req.method !== "GET";
 
@@ -30,5 +31,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*", "/api/posts/:path*"]
+  matcher: ["/admin/:path*", "/stats/:path*", "/api/admin/:path*", "/api/posts/:path*"]
 };

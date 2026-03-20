@@ -1,7 +1,8 @@
-import { getDb } from "@/lib/mongo";
 import { PostCard } from "@/components/PostCard";
-import { Post } from "@/types/post";
+import { getDb } from "@/lib/mongo";
+import { serializePost } from "@/lib/posts";
 import { buildSearchFilter } from "@/lib/search";
+import { Post } from "@/types/post";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ async function fetchTagPosts(params: {
   if (searchFilter) {
     filters.push(searchFilter as Record<string, unknown>);
   }
+
   const filter = { $and: filters };
   const total = await db.collection("posts").countDocuments(filter);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -29,12 +31,9 @@ async function fetchTagPosts(params: {
     .skip((page - 1) * PAGE_SIZE)
     .limit(PAGE_SIZE)
     .toArray();
+
   return {
-    posts: docs.map((d: any) => ({
-      ...d,
-      author: d.author ?? "佚名",
-      _id: d._id?.toString()
-    })),
+    posts: docs.map((doc: any) => serializePost(doc)),
     total,
     page,
     totalPages
@@ -64,7 +63,7 @@ export default async function TagDetailPage({
   return (
     <div className="space-y-6">
       <div className="rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-slate-100">
-        <h1 className="text-2xl font-semibold">标签 · {tag}</h1>
+        <h1 className="text-2xl font-semibold">标签 / {tag}</h1>
         <p className="mt-2 text-sm text-slate-500">共 {total} 条内容</p>
       </div>
 
@@ -76,7 +75,7 @@ export default async function TagDetailPage({
         <input
           name="q"
           defaultValue={q || ""}
-          placeholder="在当前标签内搜索"
+          placeholder="在当前标签下搜索"
           className="min-w-[200px] flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
         />
         <button
@@ -96,9 +95,7 @@ export default async function TagDetailPage({
       </form>
 
       {posts.length === 0 ? (
-        <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">
-          暂无内容。
-        </p>
+        <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">暂无内容。</p>
       ) : (
         <div className="grid gap-4">
           {posts.map((post) => (
@@ -114,13 +111,21 @@ export default async function TagDetailPage({
         <div className="flex items-center gap-2">
           <a
             href={buildHref(Math.max(1, currentPage - 1))}
-            className={`rounded-full px-3 py-1 ${currentPage <= 1 ? "pointer-events-none text-slate-300" : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"}`}
+            className={`rounded-full px-3 py-1 ${
+              currentPage <= 1
+                ? "pointer-events-none text-slate-300"
+                : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"
+            }`}
           >
             上一页
           </a>
           <a
             href={buildHref(Math.min(totalPages, currentPage + 1))}
-            className={`rounded-full px-3 py-1 ${currentPage >= totalPages ? "pointer-events-none text-slate-300" : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"}`}
+            className={`rounded-full px-3 py-1 ${
+              currentPage >= totalPages
+                ? "pointer-events-none text-slate-300"
+                : "bg-white/80 ring-1 ring-slate-200 hover:text-brand-600"
+            }`}
           >
             下一页
           </a>

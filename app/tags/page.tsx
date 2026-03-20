@@ -19,13 +19,11 @@ export default async function TagsPage() {
     <div className="space-y-6">
       <div className="rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-slate-100">
         <h1 className="text-2xl font-semibold">标签</h1>
-        <p className="mt-2 text-sm text-slate-500">按标签浏览信息流内容。</p>
+        <p className="mt-2 text-sm text-slate-500">所有访客都可以按标签浏览内容。</p>
       </div>
 
       {tags.length === 0 ? (
-        <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">
-          暂无标签。
-        </p>
+        <p className="rounded-xl bg-white/70 p-4 text-sm text-slate-500 ring-1 ring-slate-100">暂无标签。</p>
       ) : (
         <div className="flex flex-wrap gap-3">
           {tags.map((tag) => (

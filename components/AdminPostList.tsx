@@ -6,24 +6,32 @@ import { Post } from "@/types/post";
 
 type AdminPost = Post & { createdAtText?: string };
 
-export function AdminPostList({ initialPosts }: { initialPosts: AdminPost[] }) {
+export function AdminPostList({
+  initialPosts,
+  canDelete = false
+}: {
+  initialPosts: AdminPost[];
+  canDelete?: boolean;
+}) {
   const [posts, setPosts] = useState<AdminPost[]>(initialPosts);
   const [tagQuery, setTagQuery] = useState("");
 
   const visiblePosts = useMemo(() => {
-    const q = tagQuery.trim().toLowerCase();
-    if (!q) return posts;
-    return posts.filter((post) => post.tags?.some((tag) => tag.toLowerCase().includes(q)));
+    const query = tagQuery.trim().toLowerCase();
+    if (!query) return posts;
+    return posts.filter((post) => post.tags?.some((tag) => tag.toLowerCase().includes(query)));
   }, [posts, tagQuery]);
 
   async function handleDelete(slug: string) {
     if (!window.confirm("确定要删除这条内容吗？此操作不可恢复。")) return;
+
     const res = await fetch(`/api/posts/${slug}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       alert(data.error || "删除失败");
       return;
     }
+
     setPosts((prev) => prev.filter((post) => post.slug !== slug));
   }
 
@@ -35,7 +43,9 @@ export function AdminPostList({ initialPosts }: { initialPosts: AdminPost[] }) {
     );
   }
 
-  const summary = tagQuery ? `匹配 ${visiblePosts.length} / 总 ${posts.length}` : `共 ${posts.length} 条`;
+  const summary = tagQuery
+    ? `匹配 ${visiblePosts.length} / 共 ${posts.length} 条`
+    : `共 ${posts.length} 条`;
 
   return (
     <div className="space-y-3 rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100">
@@ -74,8 +84,8 @@ export function AdminPostList({ initialPosts }: { initialPosts: AdminPost[] }) {
                 {post.title}
               </Link>
               <p className="text-xs text-slate-500">
-                {(post.author || "佚名") +
-                  " · " +
+                {(post.author || "匿名") +
+                  " | " +
                   (post.createdAtText ||
                     new Date(post.createdAt).toLocaleString("zh-CN", {
                       hour12: false,
@@ -99,13 +109,15 @@ export function AdminPostList({ initialPosts }: { initialPosts: AdminPost[] }) {
               >
                 编辑
               </Link>
-              <button
-                type="button"
-                onClick={() => handleDelete(post.slug)}
-                className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-100"
-              >
-                删除
-              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(post.slug)}
+                  className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-100"
+                >
+                  删除
+                </button>
+              ) : null}
             </div>
           </div>
         ))}

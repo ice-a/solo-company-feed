@@ -15,15 +15,26 @@ function getSecret() {
 }
 
 export type SessionPayload = {
-  role: "admin";
+  role: "admin" | "user";
   iat: number;
   exp?: number;
   uid?: string;
   name?: string;
+  username?: string;
 };
 
 export function getAdminName() {
   return process.env.ADMIN_NAME?.trim() || "Admin";
+}
+
+export function isAdminName(name?: string | null) {
+  const adminName = getAdminName().trim().toLowerCase();
+  const value = name?.trim().toLowerCase();
+  return Boolean(adminName && value && adminName === value);
+}
+
+export function isAdminSession(session?: SessionPayload | null) {
+  return session?.role === "admin";
 }
 
 async function getHmacKey(secret: string) {
@@ -63,6 +74,9 @@ export async function verifySession(token?: string): Promise<SessionPayload | nu
   if (check !== sig) return null;
   try {
     const payload = JSON.parse(Buffer.from(base, "base64url").toString());
+    if (payload?.role !== "admin" && payload?.role !== "user") {
+      return null;
+    }
     if (typeof payload?.exp !== "number") {
       return null;
     }
@@ -77,7 +91,8 @@ export async function verifySession(token?: string): Promise<SessionPayload | nu
 
 export async function requireAdminFromRequest(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(COOKIE_NAME)?.value;
-  return Boolean(await verifySession(token));
+  const session = await verifySession(token);
+  return isAdminSession(session);
 }
 
 export function setAdminCookie(token: string) {

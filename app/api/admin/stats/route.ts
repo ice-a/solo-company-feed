@@ -1,16 +1,27 @@
-import { NextResponse } from "next/server";
-import { getDb } from "@/lib/mongo";
+import { NextRequest, NextResponse } from "next/server";
+import { cookieName, isAdminSession, verifySession } from "@/lib/auth";
+import { buildOwnedPostFilter } from "@/lib/posts";
+import { fetchAuthorBreakdown, fetchDailyStats, fetchStatsSummary, fetchTagStats } from "@/lib/stats";
 
-export async function GET() {
-  const db = await getDb();
-  const collection = db.collection("posts");
-  const total = await collection.countDocuments();
-  const latest = await collection.find({}, { projection: { title: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(1).toArray();
-  const top = await collection.find({}, { projection: { title: 1, views: 1, slug: 1 } }).sort({ views: -1 }).limit(3).toArray();
+export async function GET(req: NextRequest) {
+  const token = req.cookies.get(cookieName)?.value;
+  const session = await verifySession(token);
+  const personalFilter = buildOwnedPostFilter(session);
+  const adminView = isAdminSession(session);
+
+  const [mine, overall, myTags, myDaily, authors] = await Promise.all([
+    fetchStatsSummary(personalFilter),
+    fetchStatsSummary({}),
+    fetchTagStats(personalFilter, 8),
+    fetchDailyStats(personalFilter, 7),
+    adminView ? fetchAuthorBreakdown() : Promise.resolve([])
+  ]);
 
   return NextResponse.json({
-    total,
-    latest: latest[0] || null,
-    top
+    mine,
+    overall,
+    myTags,
+    myDaily,
+    authors
   });
 }

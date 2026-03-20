@@ -7,8 +7,10 @@ export const metadata = {
 export default function RegisterPage() {
   return (
     <div className="mx-auto max-w-md rounded-2xl bg-white/90 p-8 shadow-sm ring-1 ring-slate-100">
-      <h1 className="text-2xl font-semibold text-slate-900">注册账号</h1>
-      <p className="mt-2 text-sm text-slate-600">注册后 24 小时内有效，过期需重新登录。</p>
+      <h1 className="text-2xl font-semibold text-slate-900">注册</h1>
+      <p className="mt-2 text-sm text-slate-600">
+        注册后可以发布和修改自己的内容，默认每个用户每天最多发布 10 条。
+      </p>
       <div className="mt-6">
         <RegisterForm />
       </div>

@@ -3,7 +3,7 @@ import { getSiteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
-function escapeXml(input: string): string {
+function escapeXml(input: string) {
   return input
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -12,12 +12,12 @@ function escapeXml(input: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function stripMarkdown(input: string): string {
+function stripMarkdown(input: string) {
   return input
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`[^`]*`/g, " ")
     .replace(/!\[[^\]]*]\([^)]+\)/g, " ")
-    .replace(/\[[^\]]*]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]+\)/g, "$1")
     .replace(/[#>*_~\-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -42,7 +42,7 @@ export async function GET() {
       const pubDate = new Date(post.createdAt || post.updatedAt || Date.now()).toUTCString();
       return [
         "<item>",
-        `<title>${escapeXml(post.title || "Untitled")}</title>`,
+        `<title>${escapeXml(post.title || "未命名")}</title>`,
         `<link>${escapeXml(link)}</link>`,
         `<guid>${escapeXml(link)}</guid>`,
         `<pubDate>${pubDate}</pubDate>`,
@@ -55,9 +55,9 @@ export async function GET() {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
-<title>不务正业的木子</title>
+<title>OPC Feed</title>
 <link>${escapeXml(siteUrl)}</link>
-<description>less is more</description>
+<description>Public feed</description>
 <lastBuildDate>${now}</lastBuildDate>
 ${items}
 </channel>

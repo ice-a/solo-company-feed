@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/mongo";
-import { ObjectId } from "mongodb";
 import { z } from "zod";
+import { cookieName, verifySession } from "@/lib/auth";
+import { getDb } from "@/lib/mongo";
 import { OPC_SIGNAL_VALUES } from "@/lib/opc";
+import { canDeletePost, canEditPost, serializePost } from "@/lib/posts";
+
+async function getSessionFromRequest(req: NextRequest) {
+  const token = req.cookies.get(cookieName)?.value;
+  return verifySession(token);
+}
 
 export async function GET(_: NextRequest, { params }: { params: { slug: string } }) {
   const db = await getDb();
-  const post = await db.collection("posts").findOneAndUpdate(
-    { slug: params.slug },
-    { $inc: { views: 1 } },
-    { returnDocument: "after" }
-  );
+  const post = await db.collection("posts").findOne({ slug: params.slug });
 
-  if (!post || !post.value) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!post) {
+    return NextResponse.json({ error: "内容不存在" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    ...post.value,
-    author: post.value.author ?? "佚名",
-    _id: (post.value._id as ObjectId)?.toString()
-  });
+  await db.collection("posts").updateOne({ _id: post._id }, { $inc: { views: 1 } });
+  return NextResponse.json(serializePost({ ...post, views: (post.views ?? 0) + 1 }));
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { slug: string } }) {
+  const session = await getSessionFromRequest(req);
+  const db = await getDb();
   const body = await req.json().catch(() => ({}));
   const schema = z.object({
     title: z.string().min(2).max(80).optional(),
@@ -35,6 +36,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { slug: stri
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const existingPost = await db.collection("posts").findOne({ slug: params.slug });
+  if (!existingPost) {
+    return NextResponse.json({ error: "内容不存在" }, { status: 404 });
+  }
+  if (!canEditPost(existingPost, session)) {
+    return NextResponse.json({ error: "只能修改自己发布的内容" }, { status: 403 });
   }
 
   const data = parsed.data;
@@ -54,21 +63,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { slug: stri
   if (typeof data.signal === "string") set.signal = data.signal;
 
   const update: Record<string, unknown> = { $set: set };
-  if (Object.keys(unset).length > 0) update.$unset = unset;
-
-  const db = await getDb();
-  const result = await db.collection("posts").updateOne({ slug: params.slug }, update);
-  if (result.matchedCount === 0) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (Object.keys(unset).length > 0) {
+    update.$unset = unset;
   }
+
+  await db.collection("posts").updateOne({ _id: existingPost._id }, update);
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { slug: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { slug: string } }) {
+  const session = await getSessionFromRequest(req);
   const db = await getDb();
-  const result = await db.collection("posts").deleteOne({ slug: params.slug });
-  if (result.deletedCount === 0) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const existingPost = await db.collection("posts").findOne({ slug: params.slug });
+
+  if (!existingPost) {
+    return NextResponse.json({ error: "内容不存在" }, { status: 404 });
   }
+  if (!canDeletePost(existingPost, session)) {
+    return NextResponse.json({ error: "只有管理员可以删除内容" }, { status: 403 });
+  }
+
+  await db.collection("posts").deleteOne({ _id: existingPost._id });
   return NextResponse.json({ ok: true });
 }

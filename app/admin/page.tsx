@@ -1,264 +1,181 @@
-import { CreatePostForm } from "@/components/CreatePostForm";
+import { cookies } from "next/headers";
 import { AdminPostList } from "@/components/AdminPostList";
+import { AdminUserManager } from "@/components/AdminUserManager";
+import { CreatePostForm } from "@/components/CreatePostForm";
+import { cookieName, isAdminSession, verifySession } from "@/lib/auth";
 import { getDb } from "@/lib/mongo";
+import { buildOwnedPostFilter, serializePost } from "@/lib/posts";
+import { findUserById, getEffectiveDailyPostLimit, getShanghaiDayRange } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
-const cardClass =
-  "rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100 transition-[transform,box-shadow] duration-300 will-change-transform transform-gpu hover:shadow-lg hover:[transform:perspective(900px)_translateY(-4px)_rotateX(2deg)_rotateY(-2deg)]";
+type ManagedUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  role: "admin" | "user";
+  dailyPostLimit: number;
+  postCount: number;
+  todayPostCount: number;
+  posts: Array<{ slug: string; title: string; createdAt: string }>;
+};
 
-async function fetchStats() {
-  const db = await getDb();
-  const collection = db.collection("posts");
-  const total = await collection.countDocuments();
-  const latest = await collection
-    .find({}, { projection: { title: 1, createdAt: 1 } })
-    .sort({ createdAt: -1 })
-    .limit(1)
-    .toArray();
-  const top = await collection
-    .find({}, { projection: { title: 1, views: 1, slug: 1 } })
-    .sort({ views: -1 })
-    .limit(3)
-    .toArray();
-  const viewsAgg = await collection
-    .aggregate([{ $group: { _id: null, totalViews: { $sum: { $ifNull: ["$views", 0] } } } }])
-    .toArray();
-  const totalViews = viewsAgg[0]?.totalViews ?? 0;
-  const avgViews = total > 0 ? Math.round(totalViews / total) : 0;
-  const tagCount = (await collection.distinct("tags")).filter(Boolean).length;
-  const authorCount = (await collection.distinct("author")).filter(Boolean).length;
-
-  return {
-    total,
-    latest: latest[0] || null,
-    top,
-    totalViews,
-    avgViews,
-    tagCount,
-    authorCount
-  };
-}
-
-async function fetchRecentPosts() {
+async function fetchRecentPosts(session: Awaited<ReturnType<typeof verifySession>>) {
   const db = await getDb();
   const posts = await db
     .collection("posts")
-    .find({}, { projection: { markdown: 0 } })
+    .find(buildOwnedPostFilter(session), { projection: { markdown: 0 } })
     .sort({ createdAt: -1 })
     .limit(20)
     .toArray();
-  return posts.map((p: any) => ({
-    ...p,
-    _id: p._id?.toString(),
-    author: p.author ?? "佚名",
-    createdAtText: new Date(p.createdAt).toLocaleString("zh-CN", {
+
+  return posts.map((post: any) => ({
+    ...serializePost(post),
+    createdAtText: new Date(post.createdAt).toLocaleString("zh-CN", {
       hour12: false,
       timeZone: "Asia/Shanghai"
     })
   }));
 }
 
-async function fetchAllTags() {
+async function fetchAvailableTags(session: Awaited<ReturnType<typeof verifySession>>) {
   const db = await getDb();
   const tags = await db
     .collection("posts")
     .aggregate([
+      { $match: buildOwnedPostFilter(session) },
       { $unwind: "$tags" },
       { $group: { _id: "$tags", count: { $sum: 1 } } },
       { $sort: { count: -1, _id: 1 } }
     ])
     .toArray();
-  return tags.map((t: any) => t._id).filter(Boolean);
+
+  return tags.map((item: any) => item._id).filter(Boolean);
 }
 
-async function fetchTagStats() {
-  const db = await getDb();
-  const tags = await db
-    .collection("posts")
-    .aggregate([
-      { $unwind: "$tags" },
-      { $group: { _id: "$tags", count: { $sum: 1 } } },
-      { $sort: { count: -1, _id: 1 } },
-      { $limit: 12 }
-    ])
-    .toArray();
-  return tags.map((t: any) => ({ tag: t._id, count: t.count }));
+async function fetchPublishQuota(session: Awaited<ReturnType<typeof verifySession>>) {
+  const user = await findUserById(session?.uid);
+  const limit = getEffectiveDailyPostLimit(user || undefined);
+  const { startIso, endIso } = getShanghaiDayRange();
+  const todayCount = session?.uid
+    ? await getDb().then((db) =>
+        db.collection("posts").countDocuments({
+          ownerId: session.uid,
+          createdAt: { $gte: startIso, $lt: endIso }
+        })
+      )
+    : 0;
+
+  return { limit, todayCount };
 }
 
-async function fetchAuthorStats() {
+async function fetchManagedUsers(): Promise<ManagedUser[]> {
   const db = await getDb();
-  const authors = await db
-    .collection("posts")
-    .aggregate([
-      { $group: { _id: { $ifNull: ["$author", "佚名"] }, count: { $sum: 1 } } },
-      { $sort: { count: -1, _id: 1 } },
-      { $limit: 10 }
-    ])
+  const { startIso, endIso } = getShanghaiDayRange();
+  const users = await db
+    .collection("users")
+    .find(
+      {},
+      {
+        projection: {
+          username: 1,
+          displayName: 1,
+          role: 1,
+          dailyPostLimit: 1
+        }
+      }
+    )
+    .sort({ createdAt: 1 })
     .toArray();
-  return authors.map((a: any) => ({ author: a._id, count: a.count }));
-}
 
-async function fetchDailyStats() {
-  const db = await getDb();
-  const now = new Date();
-  const days: { key: string; label: string }[] = [];
-  for (let i = 6; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    const label = `${d.getMonth() + 1}/${d.getDate()}`;
-    days.push({ key, label });
-  }
-  const since = `${days[0].key}T00:00:00.000Z`;
-  const raw = await db
+  const posts = await db
     .collection("posts")
-    .aggregate([
-      { $match: { createdAt: { $gte: since } } },
-      { $addFields: { day: { $dateToString: { format: "%Y-%m-%d", date: { $toDate: "$createdAt" } } } } },
-      { $group: { _id: "$day", count: { $sum: 1 } } }
-    ])
+    .find({}, { projection: { slug: 1, title: 1, createdAt: 1, ownerId: 1, author: 1 } })
+    .sort({ createdAt: -1 })
     .toArray();
-  const map = new Map<string, number>();
-  raw.forEach((item: any) => map.set(item._id, item.count));
-  return days.map((d) => ({ label: d.label, count: map.get(d.key) ?? 0 }));
+
+  const authorToUserId = new Map<string, string>();
+  users.forEach((user: any) => {
+    const id = user._id?.toString();
+    if (!id) return;
+    if (user.username) authorToUserId.set(String(user.username).trim().toLowerCase(), id);
+    if (user.displayName) authorToUserId.set(String(user.displayName).trim().toLowerCase(), id);
+  });
+
+  const postCountMap = new Map<string, number>();
+  const todayCountMap = new Map<string, number>();
+  const postsByOwner = new Map<string, Array<{ slug: string; title: string; createdAt: string }>>();
+
+  posts.forEach((post: any) => {
+    const resolvedOwnerId =
+      post.ownerId || authorToUserId.get(String(post.author || "").trim().toLowerCase());
+    if (!resolvedOwnerId) return;
+
+    const list = postsByOwner.get(resolvedOwnerId) ?? [];
+    list.push({
+      slug: post.slug,
+      title: post.title ?? "未命名",
+      createdAt: post.createdAt ?? new Date().toISOString()
+    });
+    postsByOwner.set(resolvedOwnerId, list);
+    postCountMap.set(resolvedOwnerId, (postCountMap.get(resolvedOwnerId) ?? 0) + 1);
+
+    if (post.createdAt >= startIso && post.createdAt < endIso) {
+      todayCountMap.set(resolvedOwnerId, (todayCountMap.get(resolvedOwnerId) ?? 0) + 1);
+    }
+  });
+
+  return users
+    .map((user: any) => {
+      const id = user._id?.toString();
+      if (!id) return null;
+
+      return {
+        id,
+        username: user.username ?? "",
+        displayName: user.displayName ?? user.username ?? "",
+        role: user.role === "admin" ? "admin" : "user",
+        dailyPostLimit: getEffectiveDailyPostLimit(user),
+        postCount: postCountMap.get(id) ?? 0,
+        todayPostCount: todayCountMap.get(id) ?? 0,
+        posts: postsByOwner.get(id) ?? []
+      };
+    })
+    .filter(Boolean) as ManagedUser[];
 }
 
 export default async function AdminPage() {
-  const stats = await fetchStats();
-  const recentPosts = await fetchRecentPosts();
-  const availableTags = await fetchAllTags();
-  const tagStats = await fetchTagStats();
-  const authorStats = await fetchAuthorStats();
-  const dailyStats = await fetchDailyStats();
-  const tagMax = Math.max(...tagStats.map((t) => t.count), 1);
-  const authorMax = Math.max(...authorStats.map((a) => a.count), 1);
-  const dailyMax = Math.max(...dailyStats.map((d) => d.count), 1);
+  const token = cookies().get(cookieName)?.value;
+  const session = await verifySession(token);
+  const adminView = isAdminSession(session);
+
+  const [recentPosts, availableTags, publishQuota, managedUsers] = await Promise.all([
+    fetchRecentPosts(session),
+    fetchAvailableTags(session),
+    fetchPublishQuota(session),
+    adminView ? fetchManagedUsers() : Promise.resolve([] as ManagedUser[])
+  ]);
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className={cardClass}>
-          <p className="text-sm text-slate-500">总内容数</p>
-          <p className="mt-1 text-3xl font-semibold">{stats.total}</p>
-        </div>
-        <div className={cardClass}>
-          <p className="text-sm text-slate-500">最新发布</p>
-          <p className="mt-1 text-base font-semibold">{stats.latest?.title ?? "暂无"}</p>
-          <p className="text-xs text-slate-500">
-            {stats.latest?.createdAt
-              ? new Date(stats.latest.createdAt).toLocaleString("zh-CN", { hour12: false })
-              : ""}
+      <section className="rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-100">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-slate-900">内容后台</h1>
+          <p className="text-sm text-slate-500">
+            登录用户只能发布和修改自己的内容；删除内容、删除用户和设置发布额度仅管理员可操作。
           </p>
         </div>
-        <div className={cardClass}>
-          <p className="text-sm text-slate-500">Top 阅读</p>
-          <ul className="mt-1 space-y-1 text-sm">
-            {stats.top.map((item: any) => (
-              <li key={item.slug} className="flex items-center justify-between">
-                <span className="truncate">{item.title}</span>
-                <span className="text-slate-500">{item.views ?? 0} 阅读</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       </section>
 
-      <section className="rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-100">
-        <h3 className="text-lg font-semibold">统计面板</h3>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className={cardClass}>
-            <p className="text-sm text-slate-500">总阅读</p>
-            <p className="mt-1 text-2xl font-semibold">{stats.totalViews}</p>
-          </div>
-          <div className={cardClass}>
-            <p className="text-sm text-slate-500">平均阅读</p>
-            <p className="mt-1 text-2xl font-semibold">{stats.avgViews}</p>
-          </div>
-          <div className={cardClass}>
-            <p className="text-sm text-slate-500">标签数量</p>
-            <p className="mt-1 text-2xl font-semibold">{stats.tagCount}</p>
-          </div>
-          <div className={cardClass}>
-            <p className="text-sm text-slate-500">作者数量</p>
-            <p className="mt-1 text-2xl font-semibold">{stats.authorCount}</p>
-          </div>
-        </div>
+      <CreatePostForm
+        availableTags={availableTags}
+        publishLimit={publishQuota.limit}
+        todayCount={publishQuota.todayCount}
+      />
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100">
-            <h4 className="text-sm font-semibold text-slate-700">标签分布</h4>
-            <div className="mt-3 space-y-3">
-              {tagStats.length === 0 ? (
-                <p className="text-xs text-slate-500">暂无标签数据</p>
-              ) : (
-                tagStats.map((item) => (
-                  <div key={item.tag} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>#{item.tag}</span>
-                      <span>{item.count}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-100">
-                      <div
-                        className="h-2 rounded-full bg-brand-500/80"
-                        style={{ width: `${(item.count / tagMax) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+      <AdminPostList initialPosts={recentPosts} canDelete={false} />
 
-          <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100">
-            <h4 className="text-sm font-semibold text-slate-700">作者分布</h4>
-            <div className="mt-3 space-y-3">
-              {authorStats.length === 0 ? (
-                <p className="text-xs text-slate-500">暂无作者数据</p>
-              ) : (
-                authorStats.map((item) => (
-                  <div key={item.author} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>{item.author}</span>
-                      <span>{item.count}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-100">
-                      <div
-                        className="h-2 rounded-full bg-indigo-500/80"
-                        style={{ width: `${(item.count / authorMax) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100">
-          <h4 className="text-sm font-semibold text-slate-700">近 7 天发布</h4>
-          <div className="mt-3 space-y-3">
-            {dailyStats.map((item) => (
-              <div key={item.label} className="space-y-1">
-                <div className="flex items-center justify-between text-xs text-slate-600">
-                  <span>{item.label}</span>
-                  <span>{item.count}</span>
-                </div>
-                <div className="h-2 rounded-full bg-slate-100">
-                  <div
-                    className="h-2 rounded-full bg-emerald-500/80"
-                    style={{ width: `${(item.count / dailyMax) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <CreatePostForm availableTags={availableTags} />
-
-      <AdminPostList initialPosts={recentPosts} />
+      {adminView ? <AdminUserManager initialUsers={managedUsers} currentUserId={session?.uid || ""} /> : null}
     </div>
   );
 }

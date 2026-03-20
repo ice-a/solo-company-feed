@@ -58,7 +58,7 @@ export default function RegisterForm() {
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
-          placeholder="不填则使用用户名"
+          placeholder="用于内容展示的名称"
         />
       </label>
 

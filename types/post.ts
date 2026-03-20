@@ -7,6 +7,7 @@ export type Post = {
   tags?: string[];
   signal?: string;
   author: string;
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
   views?: number;

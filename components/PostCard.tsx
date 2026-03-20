@@ -8,7 +8,8 @@ type Props = {
 
 export function PostCard({ post }: Props) {
   const coverUrl = normalizeImageUrl(post.cover);
-  const author = post.author || "佚名";
+  const author = post.author || "匿名";
+
   return (
     <article className="group rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100 transition-[transform,box-shadow] duration-300 will-change-transform transform-gpu hover:shadow-lg hover:[transform:perspective(900px)_translateY(-4px)_rotateX(2deg)_rotateY(-2deg)]">
       <div className="flex items-start justify-between gap-3">
@@ -20,7 +21,11 @@ export function PostCard({ post }: Props) {
             {post.title}
           </Link>
           <p className="text-sm text-slate-500">
-            {author} · {new Date(post.createdAt).toLocaleString("zh-CN", { hour12: false })}
+            {author} |{" "}
+            {new Date(post.createdAt).toLocaleString("zh-CN", {
+              hour12: false,
+              timeZone: "Asia/Shanghai"
+            })}
           </p>
         </div>
         {coverUrl ? (

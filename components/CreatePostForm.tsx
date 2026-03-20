@@ -2,19 +2,26 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { normalizeImageUrl } from "@/lib/normalize";
 import { MarkdownPreview } from "@/components/MarkdownPreview";
+import { normalizeImageUrl } from "@/lib/normalize";
 
-const defaultIntro = `## solo-feed 记录模板
+const defaultIntro = `## 今日进展
 
 - 今日目标：
-- 产品/交付：
-- 客户/收入：
-- 增长/运营：
-- 学习/复盘：
-`;
+- 产品 / 交付：
+- 客户 / 收入：
+- 增长 / 运营：
+- 学习 / 复盘：`;
 
-export function CreatePostForm({ availableTags = [] }: { availableTags?: string[] }) {
+export function CreatePostForm({
+  availableTags = [],
+  publishLimit = 10,
+  todayCount = 0
+}: {
+  availableTags?: string[];
+  publishLimit?: number;
+  todayCount?: number;
+}) {
   const [title, setTitle] = useState("");
   const [cover, setCover] = useState("");
   const [tags, setTags] = useState("");
@@ -27,7 +34,7 @@ export function CreatePostForm({ availableTags = [] }: { availableTags?: string[
     const current = new Set(
       tags
         .split(",")
-        .map((t) => t.trim())
+        .map((item) => item.trim())
         .filter(Boolean)
     );
     current.add(tag);
@@ -50,7 +57,7 @@ export function CreatePostForm({ availableTags = [] }: { availableTags?: string[
             new Set(
               tags
                 .split(",")
-                .map((t) => t.trim())
+                .map((item) => item.trim())
                 .filter(Boolean)
             )
           )
@@ -60,11 +67,12 @@ export function CreatePostForm({ availableTags = [] }: { availableTags?: string[
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         alert(data.error ? JSON.stringify(data.error) : "发布失败");
-      } else {
-        const data = await res.json();
-        router.push(`/p/${data.slug}`);
-        router.refresh();
+        return;
       }
+
+      const data = await res.json();
+      router.push(`/p/${data.slug}`);
+      router.refresh();
     } finally {
       setLoading(false);
     }
@@ -74,25 +82,12 @@ export function CreatePostForm({ availableTags = [] }: { availableTags?: string[
     <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-100">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold">发布新内容</h3>
-          <p className="text-sm text-slate-500">以信息流的方式记录进展、沉淀经验。</p>
+          <h3 className="text-lg font-semibold">发布内容</h3>
+          <p className="text-sm text-slate-500">用信息流的形式记录今天的进展。</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPreview((prev) => !prev)}
-            className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:text-brand-600"
-          >
-            {preview ? "编辑" : "预览"}
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "发布中..." : "发布"}
-          </button>
-        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
+          今日已发 {todayCount} / {publishLimit}
+        </span>
       </div>
 
       <label className="block space-y-1">
@@ -102,12 +97,12 @@ export function CreatePostForm({ availableTags = [] }: { availableTags?: string[
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
-          placeholder="例如：本周交付进展"
+          placeholder="例如：本周交付进度"
         />
       </label>
 
       <label className="block space-y-1">
-        <span className="text-sm font-medium text-slate-700">封面图片 URL（可选）</span>
+        <span className="text-sm font-medium text-slate-700">封面地址（可选）</span>
         <input
           value={cover}
           onChange={(e) => setCover(e.target.value)}
@@ -141,7 +136,26 @@ export function CreatePostForm({ availableTags = [] }: { availableTags?: string[
       </label>
 
       <div className="space-y-1">
-        <span className="text-sm font-medium text-slate-700">Markdown 内容</span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-medium text-slate-700">正文</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPreview((prev) => !prev)}
+              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:text-brand-600"
+            >
+              {preview ? "继续编辑" : "预览"}
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "发布中..." : "发布"}
+            </button>
+          </div>
+        </div>
+
         {!preview ? (
           <textarea
             required
@@ -152,7 +166,7 @@ export function CreatePostForm({ availableTags = [] }: { availableTags?: string[
           />
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <MarkdownPreview markdown={markdown || "(暂无内容)"} />
+            <MarkdownPreview markdown={markdown || "（空内容）"} />
           </div>
         )}
       </div>

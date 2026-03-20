@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/mongo";
 import { z } from "zod";
-import { generateSlug } from "@/lib/slug";
-import { DEFAULT_OPC_SIGNAL, OPC_SIGNAL_VALUES } from "@/lib/opc";
 import { cookieName, verifySession } from "@/lib/auth";
+import { getDb } from "@/lib/mongo";
+import { DEFAULT_OPC_SIGNAL, OPC_SIGNAL_VALUES } from "@/lib/opc";
+import { generateSlug } from "@/lib/slug";
+import { findUserById, getEffectiveDailyPostLimit, getShanghaiDayRange } from "@/lib/users";
 
 const postSchema = z.object({
   title: z.string().min(2).max(80),
@@ -23,10 +24,10 @@ export async function GET() {
     .toArray();
 
   return NextResponse.json(
-    posts.map((p) => ({
-      ...p,
-      author: p.author ?? "佚名",
-      _id: p._id?.toString()
+    posts.map((post) => ({
+      ...post,
+      author: post.author ?? "匿名",
+      _id: post._id?.toString()
     }))
   );
 }
@@ -39,36 +40,53 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const data = parsed.data;
   const token = req.cookies.get(cookieName)?.value;
   const session = await verifySession(token);
-  if (!session) {
-    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!session?.uid) {
+    return NextResponse.json({ error: "请先登录后再发布" }, { status: 401 });
   }
-  const author = session.name ?? "佚名";
+
+  const user = await findUserById(session.uid);
+  if (!user) {
+    return NextResponse.json({ error: "用户不存在或已被删除" }, { status: 401 });
+  }
+
+  const limit = getEffectiveDailyPostLimit(user);
+  const { startIso, endIso } = getShanghaiDayRange();
+  const db = await getDb();
+  const todayCount = await db.collection("posts").countDocuments({
+    ownerId: session.uid,
+    createdAt: { $gte: startIso, $lt: endIso }
+  });
+  if (todayCount >= limit) {
+    return NextResponse.json({ error: `今日发布数量已达到上限（${limit}）` }, { status: 429 });
+  }
+
+  const data = parsed.data;
+  const author = session.name ?? "匿名";
   const now = new Date().toISOString();
   let slug = generateSlug();
-  const db = await getDb();
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const exists = await db.collection("posts").findOne({ slug });
     if (!exists) break;
     slug = generateSlug();
   }
+
   const existsAfter = await db.collection("posts").findOne({ slug });
   if (existsAfter) {
-    return NextResponse.json({ error: "Failed to allocate slug" }, { status: 500 });
+    return NextResponse.json({ error: "生成内容标识失败" }, { status: 500 });
   }
 
-  const doc = {
+  await db.collection("posts").insertOne({
     ...data,
     author,
+    ownerId: session.uid,
     slug,
     createdAt: now,
     updatedAt: now,
     views: 0
-  };
+  });
 
-  await db.collection("posts").insertOne(doc);
-  return NextResponse.json({ ok: true, slug });
+  return NextResponse.json({ ok: true, slug, todayCount: todayCount + 1, limit });
 }

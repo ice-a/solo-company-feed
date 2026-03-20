@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { signSession, cookieName, isAdminName } from "@/lib/auth";
+import { DEFAULT_DAILY_POST_LIMIT } from "@/lib/users";
 import { getDb } from "@/lib/mongo";
 import { hashPassword } from "@/lib/password";
-import { signSession, cookieName } from "@/lib/auth";
-import { z } from "zod";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -13,11 +14,13 @@ export async function POST(req: NextRequest) {
   });
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "请填写有效的用户名与密码" }, { status: 400 });
+    return NextResponse.json({ error: "用户名或密码格式不正确" }, { status: 400 });
   }
 
   const { username, password, displayName } = parsed.data;
   const usernameLower = username.toLowerCase();
+  const resolvedDisplayName = displayName || username;
+  const role = isAdminName(username) || isAdminName(resolvedDisplayName) ? "admin" : "user";
   const db = await getDb();
 
   const exists = await db.collection("users").findOne({ usernameLower });
@@ -30,7 +33,9 @@ export async function POST(req: NextRequest) {
   const doc = {
     username,
     usernameLower,
-    displayName: displayName || username,
+    displayName: resolvedDisplayName,
+    role,
+    dailyPostLimit: DEFAULT_DAILY_POST_LIMIT,
     passwordHash: hash,
     passwordSalt: salt,
     createdAt: now
@@ -41,11 +46,12 @@ export async function POST(req: NextRequest) {
   const name = doc.displayName;
   const exp = Date.now() + 24 * 60 * 60 * 1000;
   const token = await signSession({
-    role: "admin",
+    role,
     iat: Date.now(),
     exp,
     uid: result.insertedId?.toString(),
-    name
+    name,
+    username
   });
   const res = NextResponse.json({ ok: true, name });
   res.cookies.set(cookieName, token, {
