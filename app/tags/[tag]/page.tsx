@@ -1,6 +1,6 @@
 import { PostCard } from "@/components/PostCard";
 import { getDb } from "@/lib/mongo";
-import { serializePost } from "@/lib/posts";
+import { buildPinnedSort, serializePost } from "@/lib/posts";
 import { buildSearchFilter } from "@/lib/search";
 import { Post } from "@/types/post";
 
@@ -27,7 +27,7 @@ async function fetchTagPosts(params: {
   const docs = await db
     .collection("posts")
     .find(filter, { projection: { markdown: 0 } })
-    .sort({ createdAt: -1 })
+    .sort(buildPinnedSort())
     .skip((page - 1) * PAGE_SIZE)
     .limit(PAGE_SIZE)
     .toArray();
@@ -64,7 +64,7 @@ export default async function TagDetailPage({
     <div className="space-y-6">
       <div className="rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-slate-100">
         <h1 className="text-2xl font-semibold">标签 / {tag}</h1>
-        <p className="mt-2 text-sm text-slate-500">共 {total} 条内容</p>
+        <p className="mt-2 text-sm text-slate-500">共 {total} 条内容，置顶内容会优先显示。</p>
       </div>
 
       <form

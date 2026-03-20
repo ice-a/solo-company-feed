@@ -3,6 +3,7 @@ import { z } from "zod";
 import { cookieName, verifySession } from "@/lib/auth";
 import { getDb } from "@/lib/mongo";
 import { DEFAULT_OPC_SIGNAL, OPC_SIGNAL_VALUES } from "@/lib/opc";
+import { buildPinnedSort, serializePost } from "@/lib/posts";
 import { generateSlug } from "@/lib/slug";
 import { findUserById, getEffectiveDailyPostLimit, getShanghaiDayRange } from "@/lib/users";
 
@@ -19,17 +20,11 @@ export async function GET() {
   const posts = await db
     .collection("posts")
     .find({}, { projection: { markdown: 0 } })
-    .sort({ createdAt: -1 })
+    .sort(buildPinnedSort())
     .limit(50)
     .toArray();
 
-  return NextResponse.json(
-    posts.map((post) => ({
-      ...post,
-      author: post.author ?? "匿名",
-      _id: post._id?.toString()
-    }))
-  );
+  return NextResponse.json(posts.map((post) => serializePost(post)));
 }
 
 export async function POST(req: NextRequest) {
@@ -85,7 +80,8 @@ export async function POST(req: NextRequest) {
     slug,
     createdAt: now,
     updatedAt: now,
-    views: 0
+    views: 0,
+    isPinned: false
   });
 
   return NextResponse.json({ ok: true, slug, todayCount: todayCount + 1, limit });

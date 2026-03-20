@@ -6,18 +6,25 @@ type ManagedPost = {
   slug: string;
   title: string;
   createdAt: string;
+  isPinned?: boolean;
 };
 
 type ManagedUser = {
   id: string;
   username: string;
   displayName: string;
-  role: "admin" | "user";
+  role: "user" | "sponsor" | "admin";
   dailyPostLimit: number;
   postCount: number;
   todayPostCount: number;
   posts: ManagedPost[];
 };
+
+const ROLE_OPTIONS: Array<{ value: ManagedUser["role"]; label: string }> = [
+  { value: "user", label: "普通" },
+  { value: "sponsor", label: "赞助" },
+  { value: "admin", label: "管理员" }
+];
 
 export function AdminUserManager({
   initialUsers,
@@ -67,13 +74,46 @@ export function AdminUserManager({
     );
   }
 
-  async function handleSaveLimit(userId: string, dailyPostLimit: number) {
+  async function handleTogglePin(userId: string, slug: string, isPinned: boolean) {
+    const res = await fetch(`/api/posts/${slug}/pin`, {
+      method: isPinned ? "DELETE" : "POST"
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || "置顶操作失败");
+      return;
+    }
+
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id !== userId
+          ? user
+          : {
+              ...user,
+              posts: [...user.posts]
+                .map((post) =>
+                  post.slug === slug ? { ...post, isPinned: Boolean(data.isPinned) } : post
+                )
+                .sort((a, b) => {
+                  const pinnedDiff = Number(Boolean(b.isPinned)) - Number(Boolean(a.isPinned));
+                  if (pinnedDiff !== 0) return pinnedDiff;
+                  return b.createdAt.localeCompare(a.createdAt);
+                })
+            }
+      )
+    );
+  }
+
+  async function handleSaveUser(
+    userId: string,
+    payload: { dailyPostLimit: number; role: ManagedUser["role"] }
+  ) {
     setSavingId(userId);
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dailyPostLimit })
+        body: JSON.stringify(payload)
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -83,7 +123,13 @@ export function AdminUserManager({
 
       setUsers((prev) =>
         prev.map((user) =>
-          user.id === userId ? { ...user, dailyPostLimit: data.dailyPostLimit ?? dailyPostLimit } : user
+          user.id === userId
+            ? {
+                ...user,
+                dailyPostLimit: data.dailyPostLimit ?? payload.dailyPostLimit,
+                role: data.role ?? payload.role
+              }
+            : user
         )
       );
     } finally {
@@ -109,7 +155,9 @@ export function AdminUserManager({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">用户管理</h3>
-          <p className="text-sm text-slate-500">按用户名搜索，删除指定内容、删除用户，并设置每日发布额度。</p>
+          <p className="text-sm text-slate-500">
+            可按用户名搜索，设置用户等级与每日发布额度，并删除用户或其指定内容。
+          </p>
         </div>
         <input
           value={query}
@@ -130,8 +178,9 @@ export function AdminUserManager({
               currentUserId={currentUserId}
               saving={savingId === user.id}
               onDeletePost={handleDeletePost}
+              onTogglePin={handleTogglePin}
               onDeleteUser={handleDeleteUser}
-              onSaveLimit={handleSaveLimit}
+              onSaveUser={handleSaveUser}
             />
           ))
         )}
@@ -151,17 +200,23 @@ function AdminUserCard({
   currentUserId,
   saving,
   onDeletePost,
+  onTogglePin,
   onDeleteUser,
-  onSaveLimit
+  onSaveUser
 }: {
   user: ManagedUser;
   currentUserId: string;
   saving: boolean;
   onDeletePost: (slug: string) => Promise<void>;
+  onTogglePin: (userId: string, slug: string, isPinned: boolean) => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
-  onSaveLimit: (userId: string, dailyPostLimit: number) => Promise<void>;
+  onSaveUser: (
+    userId: string,
+    payload: { dailyPostLimit: number; role: ManagedUser["role"] }
+  ) => Promise<void>;
 }) {
   const [limit, setLimit] = useState(user.dailyPostLimit);
+  const [role, setRole] = useState<ManagedUser["role"]>(user.role);
 
   return (
     <div className="rounded-2xl border border-slate-100 bg-white/70 p-4">
@@ -171,11 +226,23 @@ function AdminUserCard({
             {user.displayName} <span className="text-sm font-normal text-slate-500">(@{user.username})</span>
           </h4>
           <p className="mt-1 text-sm text-slate-500">
-            角色：{user.role === "admin" ? "管理员" : "用户"} | 总发布：{user.postCount} | 今日发布：{user.todayPostCount}
+            角色：{ROLE_OPTIONS.find((item) => item.value === user.role)?.label || "普通"} | 总发布：
+            {user.postCount} | 今日发布：{user.todayPostCount}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as ManagedUser["role"])}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner focus:border-brand-500 focus:outline-none"
+          >
+            {ROLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             min={0}
@@ -186,10 +253,10 @@ function AdminUserCard({
           <button
             type="button"
             disabled={saving}
-            onClick={() => onSaveLimit(user.id, limit)}
+            onClick={() => onSaveUser(user.id, { dailyPostLimit: limit, role })}
             className="rounded-full bg-brand-50 px-3 py-2 text-xs font-medium text-brand-700 ring-1 ring-brand-100 hover:bg-brand-100 disabled:opacity-60"
           >
-            保存额度
+            保存设置
           </button>
           {user.id !== currentUserId ? (
             <button
@@ -213,7 +280,12 @@ function AdminUserCard({
               className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2"
             >
               <div>
-                <a href={`/p/${post.slug}`} className="text-sm font-medium text-slate-900 hover:text-brand-600">
+                {post.isPinned ? (
+                  <span className="mb-1 inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-100">
+                    置顶
+                  </span>
+                ) : null}
+                <a href={`/p/${post.slug}`} className="block text-sm font-medium text-slate-900 hover:text-brand-600">
                   {post.title}
                 </a>
                 <p className="text-xs text-slate-500">
@@ -223,13 +295,22 @@ function AdminUserCard({
                   })}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => onDeletePost(post.slug)}
-                className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-100"
-              >
-                删除内容
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onTogglePin(user.id, post.slug, Boolean(post.isPinned))}
+                  className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-100 hover:bg-amber-100"
+                >
+                  {post.isPinned ? "取消置顶" : "置顶"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeletePost(post.slug)}
+                  className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600 ring-1 ring-red-100 hover:bg-red-100"
+                >
+                  删除内容
+                </button>
+              </div>
             </div>
           ))
         )}

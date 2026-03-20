@@ -84,5 +84,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { slug: str
   }
 
   await db.collection("posts").deleteOne({ _id: existingPost._id });
+  await db.collection("favorites").deleteMany({ postSlug: params.slug });
   return NextResponse.json({ ok: true });
 }

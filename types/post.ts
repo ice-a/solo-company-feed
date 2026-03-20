@@ -11,4 +11,8 @@ export type Post = {
   createdAt: string;
   updatedAt: string;
   views?: number;
+  isPinned?: boolean;
+  pinnedAt?: string;
+  favoriteCount?: number;
+  isFavorited?: boolean;
 };

@@ -1,6 +1,6 @@
 import { PostCard } from "@/components/PostCard";
 import { getDb } from "@/lib/mongo";
-import { serializePost } from "@/lib/posts";
+import { buildPinnedSort, serializePost } from "@/lib/posts";
 import { buildSearchFilter } from "@/lib/search";
 import { Post } from "@/types/post";
 
@@ -32,7 +32,7 @@ async function fetchPosts(params: {
   const docs = await db
     .collection("posts")
     .find(filter, { projection: { markdown: 0 } })
-    .sort({ createdAt: -1 })
+    .sort(buildPinnedSort())
     .skip((page - 1) * PAGE_SIZE)
     .limit(PAGE_SIZE)
     .toArray();
@@ -83,7 +83,7 @@ export default async function HomePage({
       <div className="rounded-2xl bg-gradient-to-r from-brand-500 to-brand-700 p-6 text-white shadow-lg">
         <h1 className="text-2xl font-semibold">OPC Feed</h1>
         <p className="mt-2 text-sm text-white/80">
-          未登录用户可以浏览全部内容；登录用户只能发布和修改自己的内容。
+          未登录用户可以浏览全部内容；登录用户可以发布并修改自己的内容；置顶内容会优先展示。
         </p>
         {tag ? (
           <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">

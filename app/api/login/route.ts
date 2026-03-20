@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { signSession, cookieName, isAdminName } from "@/lib/auth";
+import { cookieName, isAdminName, resolveUserRole, signSession } from "@/lib/auth";
 import { getDb } from "@/lib/mongo";
 import { verifyPassword } from "@/lib/password";
 
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
   const { username, password } = parsed.data;
   const db = await getDb();
   const user = await db.collection("users").findOne({ usernameLower: username.toLowerCase() });
+
   if (
     !user ||
     typeof user.passwordSalt !== "string" ||
@@ -29,12 +30,8 @@ export async function POST(req: NextRequest) {
   }
 
   const name = user.displayName || user.username || username;
-  const role =
-    user.role === "admin" || user.role === "user"
-      ? user.role
-      : isAdminName(user.username) || isAdminName(name)
-        ? "admin"
-        : "user";
+  const storedRole = resolveUserRole(user.role);
+  const role = storedRole || (isAdminName(user.username) || isAdminName(name) ? "admin" : "user");
   const exp = Date.now() + 24 * 60 * 60 * 1000;
   const token = await signSession({
     role,
@@ -44,7 +41,8 @@ export async function POST(req: NextRequest) {
     name,
     username: user.username || username
   });
-  const res = NextResponse.json({ ok: true, name });
+
+  const res = NextResponse.json({ ok: true, name, role });
   res.cookies.set(cookieName, token, {
     httpOnly: true,
     sameSite: "lax",

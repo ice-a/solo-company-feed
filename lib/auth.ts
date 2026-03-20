@@ -6,6 +6,9 @@ const encoder = new TextEncoder();
 let cachedKey: CryptoKey | null = null;
 let cachedSecret: string | null = null;
 
+export const USER_ROLE_VALUES = ["user", "sponsor", "admin"] as const;
+export type UserRole = (typeof USER_ROLE_VALUES)[number];
+
 function getSecret() {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
@@ -15,7 +18,7 @@ function getSecret() {
 }
 
 export type SessionPayload = {
-  role: "admin" | "user";
+  role: UserRole;
   iat: number;
   exp?: number;
   uid?: string;
@@ -33,6 +36,10 @@ export function isAdminName(name?: string | null) {
   return Boolean(adminName && value && adminName === value);
 }
 
+export function resolveUserRole(value?: unknown): UserRole | null {
+  return USER_ROLE_VALUES.includes(value as UserRole) ? (value as UserRole) : null;
+}
+
 export function isAdminSession(session?: SessionPayload | null) {
   return session?.role === "admin";
 }
@@ -41,6 +48,7 @@ async function getHmacKey(secret: string) {
   if (cachedKey && cachedSecret === secret) {
     return cachedKey;
   }
+
   cachedSecret = secret;
   cachedKey = await crypto.subtle.importKey(
     "raw",
@@ -67,14 +75,17 @@ export async function signSession(payload: SessionPayload): Promise<string> {
 
 export async function verifySession(token?: string): Promise<SessionPayload | null> {
   if (!token) return null;
+
   const secret = getSecret();
   const [base, sig] = token.split(".");
   if (!base || !sig) return null;
+
   const check = await hmacSha256(base, secret);
   if (check !== sig) return null;
+
   try {
     const payload = JSON.parse(Buffer.from(base, "base64url").toString());
-    if (payload?.role !== "admin" && payload?.role !== "user") {
+    if (!resolveUserRole(payload?.role)) {
       return null;
     }
     if (typeof payload?.exp !== "number") {
@@ -83,6 +94,7 @@ export async function verifySession(token?: string): Promise<SessionPayload | nu
     if (Date.now() > payload.exp) {
       return null;
     }
+
     return payload;
   } catch {
     return null;

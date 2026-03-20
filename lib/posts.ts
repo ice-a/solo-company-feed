@@ -78,6 +78,18 @@ export function canDeletePost(doc: any, session?: SessionPayload | null) {
   return Boolean(doc && isAdminSession(session));
 }
 
+export function canPinPost(doc: any, session?: SessionPayload | null) {
+  return Boolean(doc && isAdminSession(session));
+}
+
+export function buildPinnedSort() {
+  return {
+    isPinned: -1 as const,
+    pinnedAt: -1 as const,
+    createdAt: -1 as const
+  };
+}
+
 export function serializePost(doc: any): Post {
   return {
     _id: doc._id?.toString(),
@@ -91,6 +103,10 @@ export function serializePost(doc: any): Post {
     ownerId: doc.ownerId,
     createdAt: doc.createdAt ?? new Date().toISOString(),
     updatedAt: doc.updatedAt ?? doc.createdAt ?? new Date().toISOString(),
-    views: doc.views ?? 0
+    views: doc.views ?? 0,
+    isPinned: Boolean(doc.isPinned),
+    pinnedAt: doc.pinnedAt,
+    favoriteCount: typeof doc.favoriteCount === "number" ? doc.favoriteCount : undefined,
+    isFavorited: typeof doc.isFavorited === "boolean" ? doc.isFavorited : undefined
   };
 }

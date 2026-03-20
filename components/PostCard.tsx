@@ -14,6 +14,11 @@ export function PostCard({ post }: Props) {
     <article className="group rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-slate-100 transition-[transform,box-shadow] duration-300 will-change-transform transform-gpu hover:shadow-lg hover:[transform:perspective(900px)_translateY(-4px)_rotateX(2deg)_rotateY(-2deg)]">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
+          {post.isPinned ? (
+            <span className="inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-100">
+              置顶
+            </span>
+          ) : null}
           <Link
             href={`/p/${post.slug}`}
             className="block text-lg font-semibold text-slate-900 transition group-hover:text-brand-600"

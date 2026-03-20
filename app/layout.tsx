@@ -15,6 +15,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const token = cookies().get(cookieName)?.value;
   const session = await verifySession(token);
   const userName = session?.name ?? "访客";
+  const roleLabel =
+    session?.role === "admin" ? "管理员" : session?.role === "sponsor" ? "赞助" : "普通";
 
   return (
     <html lang="zh-CN">
@@ -47,7 +49,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               {session ? (
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    {userName}
+                    {userName} · {roleLabel}
                   </span>
                   <LogoutButton />
                 </div>

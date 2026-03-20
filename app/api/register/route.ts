@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { signSession, cookieName, isAdminName } from "@/lib/auth";
+import { cookieName, signSession } from "@/lib/auth";
 import { DEFAULT_DAILY_POST_LIMIT } from "@/lib/users";
 import { getDb } from "@/lib/mongo";
 import { hashPassword } from "@/lib/password";
@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
     displayName: z.string().trim().min(2).max(32).optional()
   });
   const parsed = schema.safeParse(body);
+
   if (!parsed.success) {
     return NextResponse.json({ error: "用户名或密码格式不正确" }, { status: 400 });
   }
@@ -20,7 +21,6 @@ export async function POST(req: NextRequest) {
   const { username, password, displayName } = parsed.data;
   const usernameLower = username.toLowerCase();
   const resolvedDisplayName = displayName || username;
-  const role = isAdminName(username) || isAdminName(resolvedDisplayName) ? "admin" : "user";
   const db = await getDb();
 
   const exists = await db.collection("users").findOne({ usernameLower });
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     username,
     usernameLower,
     displayName: resolvedDisplayName,
-    role,
+    role: "user" as const,
     dailyPostLimit: DEFAULT_DAILY_POST_LIMIT,
     passwordHash: hash,
     passwordSalt: salt,
@@ -42,18 +42,17 @@ export async function POST(req: NextRequest) {
   };
 
   const result = await db.collection("users").insertOne(doc);
-
-  const name = doc.displayName;
   const exp = Date.now() + 24 * 60 * 60 * 1000;
   const token = await signSession({
-    role,
+    role: doc.role,
     iat: Date.now(),
     exp,
     uid: result.insertedId?.toString(),
-    name,
+    name: doc.displayName,
     username
   });
-  const res = NextResponse.json({ ok: true, name });
+
+  const res = NextResponse.json({ ok: true, name: doc.displayName, role: doc.role });
   res.cookies.set(cookieName, token, {
     httpOnly: true,
     sameSite: "lax",

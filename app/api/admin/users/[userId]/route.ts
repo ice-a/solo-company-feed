@@ -24,26 +24,49 @@ export async function PATCH(req: NextRequest, { params }: { params: { userId: st
   }
 
   const body = await req.json().catch(() => ({}));
-  const schema = z.object({
-    dailyPostLimit: z.number().int().min(0).max(1000)
-  });
+  const schema = z
+    .object({
+      dailyPostLimit: z.number().int().min(0).max(1000).optional(),
+      role: z.enum(["user", "sponsor", "admin"]).optional()
+    })
+    .refine((value) => value.dailyPostLimit !== undefined || value.role !== undefined, {
+      message: "至少需要提交一个要修改的字段"
+    });
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  if (session.uid === params.userId && parsed.data.role && parsed.data.role !== "admin") {
+    return NextResponse.json({ error: "不能把当前登录管理员降级" }, { status: 400 });
+  }
+
   const db = await getDb();
+  const setPayload: Record<string, unknown> = {};
+  if (parsed.data.dailyPostLimit !== undefined) {
+    setPayload.dailyPostLimit = parsed.data.dailyPostLimit;
+  }
+  if (parsed.data.role) {
+    setPayload.role = parsed.data.role;
+  }
+
   const result = await db.collection("users").updateOne(
     { _id: new ObjectId(params.userId) },
-    { $set: { dailyPostLimit: parsed.data.dailyPostLimit } }
+    { $set: setPayload }
   );
   if (result.matchedCount === 0) {
     return NextResponse.json({ error: "用户不存在" }, { status: 404 });
   }
 
+  const updatedUser = await db.collection("users").findOne(
+    { _id: new ObjectId(params.userId) },
+    { projection: { dailyPostLimit: 1, role: 1 } }
+  );
+
   return NextResponse.json({
     ok: true,
-    dailyPostLimit: parsed.data.dailyPostLimit ?? DEFAULT_DAILY_POST_LIMIT
+    dailyPostLimit: updatedUser?.dailyPostLimit ?? DEFAULT_DAILY_POST_LIMIT,
+    role: updatedUser?.role ?? "user"
   });
 }
 
@@ -65,7 +88,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { userId: s
     return NextResponse.json({ error: "用户不存在" }, { status: 404 });
   }
 
-  await db.collection("posts").deleteMany({
+  const postFilter = {
     $or: [
       { ownerId: params.userId },
       {
@@ -78,6 +101,19 @@ export async function DELETE(req: NextRequest, { params }: { params: { userId: s
           }
         ]
       }
+    ]
+  };
+
+  const ownedPosts = await db
+    .collection("posts")
+    .find(postFilter, { projection: { slug: 1 } })
+    .toArray();
+
+  await db.collection("posts").deleteMany(postFilter);
+  await db.collection("favorites").deleteMany({
+    $or: [
+      { ownerId: params.userId },
+      { postSlug: { $in: ownedPosts.map((post: any) => post.slug).filter(Boolean) } }
     ]
   });
   await db.collection("users").deleteOne({ _id: new ObjectId(params.userId) });
