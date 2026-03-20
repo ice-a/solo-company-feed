@@ -4,9 +4,18 @@ import { getDb } from "@/lib/mongo";
 export const DEFAULT_DAILY_POST_LIMIT = 10;
 const SHANGHAI_OFFSET_HOURS = 8;
 
-export function getEffectiveDailyPostLimit(user?: { dailyPostLimit?: number | null }) {
-  if (typeof user?.dailyPostLimit === "number" && user.dailyPostLimit >= 0) {
-    return user.dailyPostLimit;
+type UserLimitSource = {
+  dailyPostLimit?: number | null;
+} | Record<string, unknown> | null | undefined;
+
+export function getEffectiveDailyPostLimit(user?: UserLimitSource) {
+  const limit =
+    user && typeof user === "object" && "dailyPostLimit" in user
+      ? user.dailyPostLimit
+      : undefined;
+
+  if (typeof limit === "number" && limit >= 0) {
+    return limit;
   }
 
   return DEFAULT_DAILY_POST_LIMIT;
@@ -28,7 +37,7 @@ export function getShanghaiDayRange(now = new Date()) {
   };
 }
 
-export async function findUserById(uid?: string | null) {
+export async function findUserById(uid?: string | null): Promise<Record<string, unknown> | null> {
   if (!uid || !ObjectId.isValid(uid)) {
     return null;
   }
